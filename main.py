@@ -15,6 +15,8 @@ class FaceDetectionApp:
         self.cap = None
         self.is_running = False
         self.last_detected = datetime.datetime.now() - datetime.timedelta(seconds=11)
+        self.canvas_width = 640
+        self.canvas_height = 480
         
         # Face classifier
         self.face_classifier = cv2.CascadeClassifier(
@@ -48,8 +50,29 @@ class FaceDetectionApp:
         self.video_frame = ttk.Frame(self.window, padding="10")
         self.video_frame.grid(row=1, column=0)
         
-        self.canvas = tk.Canvas(self.video_frame, width=640, height=480)
+        self.canvas = tk.Canvas(self.video_frame, width=self.canvas_width, height=self.canvas_height)
         self.canvas.pack()
+
+    def resize_frame(self, frame):
+        # Get original dimensions
+        height, width = frame.shape[:2]
+        
+        # Calculate aspect ratios
+        aspect_ratio_frame = width / height
+        aspect_ratio_canvas = self.canvas_width / self.canvas_height
+        
+        # Calculate new dimensions
+        if aspect_ratio_frame > aspect_ratio_canvas:
+            # Frame is wider than canvas
+            new_width = self.canvas_width
+            new_height = int(self.canvas_width / aspect_ratio_frame)
+        else:
+            # Frame is taller than canvas
+            new_height = self.canvas_height
+            new_width = int(self.canvas_height * aspect_ratio_frame)
+        
+        # Resize frame
+        return cv2.resize(frame, (new_width, new_height))
 
     def change_source(self, selection):
         if selection == "Video File":
@@ -66,7 +89,7 @@ class FaceDetectionApp:
             self.video_source = filename
 
     def toggle_detection(self):
-        if self.is_running:
+        if self.is_running: 
             self.is_running = False
             self.start_stop_button.config(text="Start")
             if self.cap is not None:
@@ -86,12 +109,16 @@ class FaceDetectionApp:
             "description": "Camera Detected Someone's face. Go check who is",
             "type": "info", 
         })
-        print(res)
+        print(res.status_code)
+        print(res.json())
 
     def update(self):
         if self.is_running and self.cap is not None:
             ret, frame = self.cap.read()
             if ret:
+                # Resize frame to fit canvas
+                frame = self.resize_frame(frame)
+                
                 # Process frame
                 gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = self.face_classifier.detectMultiScale(
@@ -112,7 +139,11 @@ class FaceDetectionApp:
                 photo = ImageTk.PhotoImage(image=Image.fromarray(rgb_frame))
                 
                 # Update canvas
-                self.canvas.create_image(0, 0, image=photo, anchor=tk.NW)
+                self.canvas.create_image(
+                    (self.canvas_width - photo.width()) // 2,
+                    (self.canvas_height - photo.height()) // 2,
+                    image=photo, anchor=tk.NW
+                )
                 self.canvas.photo = photo
             
             # Schedule next update
